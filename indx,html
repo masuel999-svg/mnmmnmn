@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>صياد السمك التعليمي | Full Game</title>
+    <style>
+        :root {
+            --primary-bg: #0a192f;
+            --card-bg: #112240;
+            --accent: #64ffda;
+            --gold: #ffd700;
+            --danger: #ff4d4d;
+            --success: #2ecc71;
+            --text: #e6f1ff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { background: var(--primary-bg); color: var(--text); padding-bottom: 30px; }
+        
+        header {
+            background: var(--card-bg);
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #233554;
+        }
+        .stats-bar {
+            background: #1d3557;
+            padding: 12px 25px;
+            display: flex;
+            justify-content: space-around;
+            font-weight: bold;
+            font-size: 1.05rem;
+            border-bottom: 2px solid var(--accent);
+        }
+        .stat-val { color: var(--gold); }
+        
+        .container { max-width: 1100px; margin: 20px auto; padding: 0 15px; }
+        
+        .nav-tabs { display: flex; gap: 10px; margin-bottom: 15px; }
+        .tab-btn {
+            background: #233554; color: var(--text); border: none; padding: 10px 20px;
+            border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s;
+        }
+        .tab-btn.active, .tab-btn:hover { background: var(--accent); color: #0a192f; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        #canvas-wrapper {
+            position: relative;
+            width: 100%;
+            height: 480px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+            border: 2px solid var(--accent);
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        .controls {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 10;
+        }
+        .btn-cast {
+            background: var(--gold); color: #000; border: none; padding: 14px 32px;
+            border-radius: 30px; font-size: 1.2rem; font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.5); transition: 0.2s;
+        }
+        .btn-cast:hover { transform: scale(1.05); }
+
+        /* Modals */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10, 25, 47, 0.9); display: none;
+            justify-content: center; align-items: center; z-index: 100;
+        }
+        .modal-body {
+            background: var(--card-bg); width: 90%; max-width: 550px;
+            padding: 25px; border-radius: 15px; border: 2px solid var(--accent);
+        }
+        .option-btn {
+            display: block; width: 100%; background: #1d3557; color: #fff;
+            border: 1px solid var(--accent); padding: 12px; margin: 10px 0;
+            border-radius: 8px; text-align: right; cursor: pointer; font-size: 1rem;
+        }
+        .option-btn:hover { background: #457b9d; }
+
+        /* Store Grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; }
+        .card { background: var(--card-bg); padding: 15px; border-radius: 10px; border: 1px solid #233554; }
+        .card h3 { color: var(--accent); margin-bottom: 8px; }
+        .buy-btn {
+            width: 100%; margin-top: 10px; padding: 8px; background: var(--accent);
+            color: #0a192f; border: none; font-weight: bold; border-radius: 5px; cursor: pointer;
+        }
+        .buy-btn:disabled { background: #495670; cursor: not-allowed; }
+
+        /* Dashboard Forms */
+        .box { background: var(--card-bg); padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        select, input {
+            width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px;
+            background: #0a192f; color: #fff; border: 1px solid #233554; border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🎣 صياد السمك التعليمي</h1>
+        <select id="langSelect" onchange="switchLang(this.value)" style="width: auto; margin: 0;">
+            <option value="ar">العربية</option>
+            <option value="en">English</option>
+        </select>
+    </header>
+
+    <div class="stats-bar">
+        <div>🪙 الذهب: <span id="coins" class="stat-val">150</span></div>
+        <div>⭐ النقاط: <span id="score" class="stat-val">0</span></div>
+        <div>🎣 السنارة: <span id="rodName" class="stat-val">خشبية</span></div>
+        <div>🚣 القارب: <span id="boatName" class="stat-val">خشب صغير</span></div>
+    </div>
+
+    <div class="container">
+        <div class="nav-tabs">
+            <button class="tab-btn active" onclick="showTab('game')">🎮 اللعبة</button>
+            <button class="tab-btn" onclick="showTab('store')">🛒 المتجر</button>
+            <button class="tab-btn" onclick="showTab('encyclo')">📖 الموسوعة</button>
+            <button class="tab-btn" onclick="showTab('teacher')">👨‍🏫 لوحة المعلم</button>
+        </div>
+
+        <!-- 1. اللعبة -->
+        <div id="tab-game" class="tab-content active">
+            <div id="canvas-wrapper">
+                <canvas id="gameCanvas"></canvas>
+                <div class="controls">
+                    <button class="btn-cast" onclick="castLine()">إلقاء السنارة 🎣</button>
+                </div>
+            </div>
+            <div style="margin-top: 15px; background: var(--card-bg); padding: 12px; border-radius: 8px; color: var(--accent);">
+                📘 الكتاب الحالي: <strong id="currentBookText">شرح الآجرومية (صفحة 1 - 50)</strong>
+            </div>
+        </div>
+
+        <!-- 2. المتجر -->
+        <div id="tab-store" class="tab-content">
+            <h2>🛒 متجر التجهيزات</h2>
+            <div class="grid" id="storeGrid" style="margin-top: 15px;"></div>
+        </div>
+
+        <!-- 3. الموسوعة -->
+        <div id="tab-encyclo" class="tab-content">
+            <h2>📖 موسوعة الأسماك والأنواع المنقرضة</h2>
+            <div class="grid" id="encycloGrid" style="margin-top: 15px;"></div>
+        </div>
+
+        <!-- 4. لوحة المعلم -->
+        <div id="tab-teacher" class="tab-content">
+            <div class="box">
+                <h2>👨‍🏫 تحديد النطاق التعليمي</h2>
+                <label>اختر الكتاب:</label>
+                <select id="bookSelect" onchange="updateRanges()"></select>
+                
+                <label>اختر النطاق (كل 50 صفحة):</label>
+                <select id="rangeSelect" onchange="applyPresetRange()"></select>
+                
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label>من صفحة:</label>
+                        <input type="number" id="startPage" value="1">
+                    </div>
+                    <div style="flex: 1;">
+                        <label>إلى صفحة:</label>
+                        <input type="number" id="endPage" value="50">
+                    </div>
+                </div>
+                
+                <button class="buy-btn" onclick="saveTeacherSettings()" style="padding: 12px; font-size: 1rem;">حفظ وحفظ النطاق</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة الأسئلة -->
+    <div class="modal" id="qModal">
+        <div class="modal-body">
+            <h3 style="color: var(--gold); margin-bottom: 5px;" id="qFish">🐟 صيد جديد!</h3>
+            <p style="font-size: 0.85rem; color: var(--accent); margin-bottom: 15px;" id="qSource">المصدر: -</p>
+            <h4 id="qText" style="margin-bottom: 15px;">السؤال هنا؟</h4>
+            <div id="qOptions"></div>
+        </div>
+    </div>
+
+    <script>
+        // Data & Questions
+        const books = [
+            { id: 'ajroomya', title: 'شرح الآجرومية - للشيخ العثيمين', pages: 576 },
+            { id: 'noor_bayan', title: 'كتاب نور البيان', pages: 98 },
+            { id: 'tariq', title: 'الطريق إلى العربية (المستوى الثاني)', pages: 167 },
+            { id: 'nooranya', title: 'القاعدة النورانية', pages: 36 },
+            { id: 'tajweed', title: 'Essential Tajweed Rules', pages: 58 }
+        ];
+
+        const questions = {
+            'ajroomya': [
+                { page: 12, q: "ما هو تعريف 'الكلام' عند النحويين؟", opts: ["اللفظ المركب المفيد بالوضع", "كل لفظ يتحدث به الإنسان", "الخط والكتابة فقط", "الإشارة الواضحة"], ans: 0 },
+                { page: 28, q: "كم عدد أقسام الكلام في اللغة العربية؟", opts: ["ثلاثة: اسم وفعل وحرف", "أربعة أقسام", "قسمان فقط", "خمسة أقسام"], ans: 0 },
+                { page: 45, q: "علامة خفض الاسم الأصلية هي:", opts: ["الكسرة", "الفتحة", "الضمة", "السكون"], ans: 0 }
+            ],
+            'noor_bayan': [
+                { page: 5, q: "كم عدد الحروف الهجائية بالترتيب المعتمد؟", opts: ["29 حرفاً بالحساب مع الهمزة", "28 حرفاً", "30 حرفاً", "26 حرفاً"], ans: 0 },
+                { page: 18, q: "ما هي حركة الفتحة؟", opts: ["شرطة صغيرة فوق الحرف", "شرطة تحت الحرف", "واو صغيرة", "سكون"], ans: 0 }
+            ],
+            'tariq': [
+                { page: 10, q: "ما معنى كلمة 'المستشفى'؟", opts: ["مكان العلاج والطبابة", "المدرسة", "المتجر", "الحديقة"], ans: 0 }
+            ],
+            'nooranya': [
+                { page: 4, q: "في الدرس الأول تقرأ الحروف بـ:", opts: ["أسمائها (ألف، با...)", "بحركاتها", "بالتنوين", "بالسكون"], ans: 0 }
+            ],
+            'tajweed': [
+                { page: 8, q: "What is 'Ghunnah' in Tajweed?", opts: ["Nasal sound emitted from nose", "Heavy sound from throat", "Stopping breath", "Stretching vowel"], ans: 0 }
+            ]
+        };
+
+        const storeItems = [
+            { id: 'rod_silver', type: 'rod', name: 'سنارة الفضة', price: 100 },
+            { id: 'rod_gold', type: 'rod', name: 'سنارة الذهب', price: 250 },
+            { id: 'boat_motor', type: 'boat', name: 'قارب المحرك', price: 300 }
+        ];
+
+        const fishesInfo = [
+            { name: 'سمكة الماكريل', rarity: 'شائعة', depth: 'سطحي' },
+            { name: 'التونة الذهبية', rarity: 'نادرة', depth: 'متوسط' },
+            { name: 'الميجالودون (منقرضة)', rarity: 'أسطورية', depth: 'أعماق سحيقة' }
+        ];
+
+        // State
+        let state = {
+            coins: 150, score: 0, rod: 'خشبية', boat: 'خشب صغير',
+            book: 'ajroomya', startP: 1, endP: 50, answered: []
+        };
+
+        // Canvas Engine
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let hookY = 50;
+        let isCasting = false;
+        let fishList = [
+            { x: 50, y: 180, speed: 2, color: '#f39c12' },
+            { x: 250, y: 300, speed: 1.5, color: '#e74c3c' },
+            { x: 450, y: 400, speed: 1, color: '#9b59b6' }
+        ];
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function loop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Water
+            let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#4facfe'); grad.addColorStop(1, '#001e3d');
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Boat
+            ctx.fillStyle = '#8b4513';
+            ctx.fillRect(canvas.width / 2 - 50, 20, 100, 20);
+
+            // Line & Hook
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 35); ctx.lineTo(canvas.width / 2, hookY);
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath(); ctx.arc(canvas.width / 2, hookY, 6, 0, Math.PI * 2); ctx.fill();
+
+            // Fish
+            fishList.forEach(f => {
+                f.x += f.speed;
+                if (f.x > canvas.width + 30) f.x = -30;
+                ctx.fillStyle = f.color;
+                ctx.beginPath(); ctx.ellipse(f.x, f.y, 18, 9, 0, 0, Math.PI * 2); ctx.fill();
+            });
+
+            // Physics
+            if (isCasting) {
+                hookY += 4;
+                if (hookY > canvas.height - 40) {
+                    isCasting = false;
+                    openQuestion();
+                }
+            } else if (hookY > 50) {
+                hookY -= 5;
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        function castLine() {
+            if (!isCasting && hookY <= 55) isCasting = true;
+        }
+
+        function openQuestion() {
+            let pool = (questions[state.book] || []).filter(q => q.page >= state.startP && q.page <= state.endP);
+            if (pool.length === 0) pool = questions['ajroomya'];
+
+            let q = pool[Math.floor(Math.random() * pool.length)];
+            let bObj = books.find(b => b.id === state.book);
+
+            document.getElementById('qSource').innerText = `المصدر: ${bObj.title} (ص ${q.page})`;
+            document.getElementById('qText').innerText = q.q;
+
+            let optsDiv = document.getElementById('qOptions');
+            optsDiv.innerHTML = '';
+            q.opts.forEach((opt, idx) => {
+                let btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerText = `${idx + 1}. ${opt}`;
+                btn.onclick = () => {
+                    if (idx === q.ans) {
+                        state.coins += 50; state.score += 20;
+                        alert('إجابة صحيحة! (+50 ذهب)');
+                    } else {
+                        alert('إجابة خاطئة، حاول ثانية!');
+                    }
+                    updateUI();
+                    document.getElementById('qModal').style.display = 'none';
+                };
+                optsDiv.appendChild(btn);
+            });
+
+            document.getElementById('qModal').style.display = 'flex';
+        }
+
+        // Tabs & Logic
+        function showTab(name) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(`tab-${name}`).classList.add('active');
+        }
+
+        function initTeacher() {
+            let bSel = document.getElementById('bookSelect');
+            bSel.innerHTML = '';
+            books.forEach(b => {
+                let opt = document.createElement('option');
+                opt.value = b.id; opt.innerText = b.title;
+                bSel.appendChild(opt);
+            });
+            updateRanges();
+        }
+
+        function updateRanges() {
+            let bId = document.getElementById('bookSelect').value;
+            let b = books.find(x => x.id === bId);
+            let rSel = document.getElementById('rangeSelect');
+            rSel.innerHTML = '';
+            let step = 50;
+            for (let i = 0; i < Math.ceil(b.pages / step); i++) {
+                let s = i * step + 1, e = Math.min((i + 1) * step, b.pages);
+                let opt = document.createElement('option');
+                opt.value = `${s}-${e}`; opt.innerText = `صفحة ${s} إلى ${e}`;
+                rSel.appendChild(opt);
+            }
+            applyPresetRange();
+        }
+
+        function applyPresetRange() {
+            let parts = document.getElementById('rangeSelect').value.split('-');
+            document.getElementById('startPage').value = parts[0];
+            document.getElementById('endPage').value = parts[1];
+        }
+
+        function saveTeacherSettings() {
+            state.book = document.getElementById('bookSelect').value;
+            state.startP = parseInt(document.getElementById('startPage').value);
+            state.endP = parseInt(document.getElementById('endPage').value);
+            let b = books.find(x => x.id === state.book);
+            document.getElementById('currentBookText').innerText = `${b.title} (صفحة ${state.startP} - ${state.endP})`;
+            alert('تم حفظ النطاق بنجاح!');
+            showTab('game');
+        }
+
+        function renderStore() {
+            let grid = document.getElementById('storeGrid');
+            grid.innerHTML = '';
+            storeItems.forEach(item => {
+                grid.innerHTML += `
+                    <div class="card">
+                        <h3>${item.name}</h3>
+                        <p>السعر: ${item.price} 🪙</p>
+                        <button class="buy-btn" onclick="buyItem('${item.id}', ${item.price}, '${item.name}', '${item.type}')">شراء</button>
+                    </div>
+                `;
+            });
+        }
+
+        function buyItem(id, price, name, type) {
+            if (state.coins >= price) {
+                state.coins -= price;
+                if (type === 'rod') state.rod = name;
+                if (type === 'boat') state.boat = name;
+                updateUI();
+                alert(`تم شراء ${name} بنجاح!`);
+            } else alert('لا تملك ذهباً كافياً!');
+        }
+
+        function renderEncyclo() {
+            let grid = document.getElementById('encycloGrid');
+            grid.innerHTML = '';
+            fishesInfo.forEach(f => {
+                grid.innerHTML += `
+                    <div class="card">
+                        <h3>${f.name}</h3>
+                        <p>الندرة: ${f.rarity}</p>
+                        <p>العمق: ${f.depth}</p>
+                    </div>
+                `;
+            });
+        }
+
+        function updateUI() {
+            document.getElementById('coins').innerText = state.coins;
+            document.getElementById('score').innerText = state.score;
+            document.getElementById('rodName').innerText = state.rod;
+            document.getElementById('boatName').innerText = state.boat;
+        }
+
+        window.onload = () => {
+            initTeacher();
+            renderStore();
+            renderEncyclo();
+            loop();
+        };
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>صياد السمك التعليمي | Full Game</title>
+    <style>
+        :root {
+            --primary-bg: #0a192f;
+            --card-bg: #112240;
+            --accent: #64ffda;
+            --gold: #ffd700;
+            --danger: #ff4d4d;
+            --success: #2ecc71;
+            --text: #e6f1ff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { background: var(--primary-bg); color: var(--text); padding-bottom: 30px; }
+        
+        header {
+            background: var(--card-bg);
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #233554;
+        }
+        .stats-bar {
+            background: #1d3557;
+            padding: 12px 25px;
+            display: flex;
+            justify-content: space-around;
+            font-weight: bold;
+            font-size: 1.05rem;
+            border-bottom: 2px solid var(--accent);
+        }
+        .stat-val { color: var(--gold); }
+        
+        .container { max-width: 1100px; margin: 20px auto; padding: 0 15px; }
+        
+        .nav-tabs { display: flex; gap: 10px; margin-bottom: 15px; }
+        .tab-btn {
+            background: #233554; color: var(--text); border: none; padding: 10px 20px;
+            border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s;
+        }
+        .tab-btn.active, .tab-btn:hover { background: var(--accent); color: #0a192f; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        #canvas-wrapper {
+            position: relative;
+            width: 100%;
+            height: 480px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+            border: 2px solid var(--accent);
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        .controls {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 10;
+        }
+        .btn-cast {
+            background: var(--gold); color: #000; border: none; padding: 14px 32px;
+            border-radius: 30px; font-size: 1.2rem; font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.5); transition: 0.2s;
+        }
+        .btn-cast:hover { transform: scale(1.05); }
+
+        /* Modals */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10, 25, 47, 0.9); display: none;
+            justify-content: center; align-items: center; z-index: 100;
+        }
+        .modal-body {
+            background: var(--card-bg); width: 90%; max-width: 550px;
+            padding: 25px; border-radius: 15px; border: 2px solid var(--accent);
+        }
+        .option-btn {
+            display: block; width: 100%; background: #1d3557; color: #fff;
+            border: 1px solid var(--accent); padding: 12px; margin: 10px 0;
+            border-radius: 8px; text-align: right; cursor: pointer; font-size: 1rem;
+        }
+        .option-btn:hover { background: #457b9d; }
+
+        /* Store Grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; }
+        .card { background: var(--card-bg); padding: 15px; border-radius: 10px; border: 1px solid #233554; }
+        .card h3 { color: var(--accent); margin-bottom: 8px; }
+        .buy-btn {
+            width: 100%; margin-top: 10px; padding: 8px; background: var(--accent);
+            color: #0a192f; border: none; font-weight: bold; border-radius: 5px; cursor: pointer;
+        }
+        .buy-btn:disabled { background: #495670; cursor: not-allowed; }
+
+        /* Dashboard Forms */
+        .box { background: var(--card-bg); padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        select, input {
+            width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px;
+            background: #0a192f; color: #fff; border: 1px solid #233554; border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🎣 صياد السمك التعليمي</h1>
+        <select id="langSelect" onchange="switchLang(this.value)" style="width: auto; margin: 0;">
+            <option value="ar">العربية</option>
+            <option value="en">English</option>
+        </select>
+    </header>
+
+    <div class="stats-bar">
+        <div>🪙 الذهب: <span id="coins" class="stat-val">150</span></div>
+        <div>⭐ النقاط: <span id="score" class="stat-val">0</span></div>
+        <div>🎣 السنارة: <span id="rodName" class="stat-val">خشبية</span></div>
+        <div>🚣 القارب: <span id="boatName" class="stat-val">خشب صغير</span></div>
+    </div>
+
+    <div class="container">
+        <div class="nav-tabs">
+            <button class="tab-btn active" onclick="showTab('game')">🎮 اللعبة</button>
+            <button class="tab-btn" onclick="showTab('store')">🛒 المتجر</button>
+            <button class="tab-btn" onclick="showTab('encyclo')">📖 الموسوعة</button>
+            <button class="tab-btn" onclick="showTab('teacher')">👨‍🏫 لوحة المعلم</button>
+        </div>
+
+        <!-- 1. اللعبة -->
+        <div id="tab-game" class="tab-content active">
+            <div id="canvas-wrapper">
+                <canvas id="gameCanvas"></canvas>
+                <div class="controls">
+                    <button class="btn-cast" onclick="castLine()">إلقاء السنارة 🎣</button>
+                </div>
+            </div>
+            <div style="margin-top: 15px; background: var(--card-bg); padding: 12px; border-radius: 8px; color: var(--accent);">
+                📘 الكتاب الحالي: <strong id="currentBookText">شرح الآجرومية (صفحة 1 - 50)</strong>
+            </div>
+        </div>
+
+        <!-- 2. المتجر -->
+        <div id="tab-store" class="tab-content">
+            <h2>🛒 متجر التجهيزات</h2>
+            <div class="grid" id="storeGrid" style="margin-top: 15px;"></div>
+        </div>
+
+        <!-- 3. الموسوعة -->
+        <div id="tab-encyclo" class="tab-content">
+            <h2>📖 موسوعة الأسماك والأنواع المنقرضة</h2>
+            <div class="grid" id="encycloGrid" style="margin-top: 15px;"></div>
+        </div>
+
+        <!-- 4. لوحة المعلم -->
+        <div id="tab-teacher" class="tab-content">
+            <div class="box">
+                <h2>👨‍🏫 تحديد النطاق التعليمي</h2>
+                <label>اختر الكتاب:</label>
+                <select id="bookSelect" onchange="updateRanges()"></select>
+                
+                <label>اختر النطاق (كل 50 صفحة):</label>
+                <select id="rangeSelect" onchange="applyPresetRange()"></select>
+                
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label>من صفحة:</label>
+                        <input type="number" id="startPage" value="1">
+                    </div>
+                    <div style="flex: 1;">
+                        <label>إلى صفحة:</label>
+                        <input type="number" id="endPage" value="50">
+                    </div>
+                </div>
+                
+                <button class="buy-btn" onclick="saveTeacherSettings()" style="padding: 12px; font-size: 1rem;">حفظ وحفظ النطاق</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة الأسئلة -->
+    <div class="modal" id="qModal">
+        <div class="modal-body">
+            <h3 style="color: var(--gold); margin-bottom: 5px;" id="qFish">🐟 صيد جديد!</h3>
+            <p style="font-size: 0.85rem; color: var(--accent); margin-bottom: 15px;" id="qSource">المصدر: -</p>
+            <h4 id="qText" style="margin-bottom: 15px;">السؤال هنا؟</h4>
+            <div id="qOptions"></div>
+        </div>
+    </div>
+
+    <script>
+        // Data & Questions
+        const books = [
+            { id: 'ajroomya', title: 'شرح الآجرومية - للشيخ العثيمين', pages: 576 },
+            { id: 'noor_bayan', title: 'كتاب نور البيان', pages: 98 },
+            { id: 'tariq', title: 'الطريق إلى العربية (المستوى الثاني)', pages: 167 },
+            { id: 'nooranya', title: 'القاعدة النورانية', pages: 36 },
+            { id: 'tajweed', title: 'Essential Tajweed Rules', pages: 58 }
+        ];
+
+        const questions = {
+            'ajroomya': [
+                { page: 12, q: "ما هو تعريف 'الكلام' عند النحويين؟", opts: ["اللفظ المركب المفيد بالوضع", "كل لفظ يتحدث به الإنسان", "الخط والكتابة فقط", "الإشارة الواضحة"], ans: 0 },
+                { page: 28, q: "كم عدد أقسام الكلام في اللغة العربية؟", opts: ["ثلاثة: اسم وفعل وحرف", "أربعة أقسام", "قسمان فقط", "خمسة أقسام"], ans: 0 },
+                { page: 45, q: "علامة خفض الاسم الأصلية هي:", opts: ["الكسرة", "الفتحة", "الضمة", "السكون"], ans: 0 }
+            ],
+            'noor_bayan': [
+                { page: 5, q: "كم عدد الحروف الهجائية بالترتيب المعتمد؟", opts: ["29 حرفاً بالحساب مع الهمزة", "28 حرفاً", "30 حرفاً", "26 حرفاً"], ans: 0 },
+                { page: 18, q: "ما هي حركة الفتحة؟", opts: ["شرطة صغيرة فوق الحرف", "شرطة تحت الحرف", "واو صغيرة", "سكون"], ans: 0 }
+            ],
+            'tariq': [
+                { page: 10, q: "ما معنى كلمة 'المستشفى'؟", opts: ["مكان العلاج والطبابة", "المدرسة", "المتجر", "الحديقة"], ans: 0 }
+            ],
+            'nooranya': [
+                { page: 4, q: "في الدرس الأول تقرأ الحروف بـ:", opts: ["أسمائها (ألف، با...)", "بحركاتها", "بالتنوين", "بالسكون"], ans: 0 }
+            ],
+            'tajweed': [
+                { page: 8, q: "What is 'Ghunnah' in Tajweed?", opts: ["Nasal sound emitted from nose", "Heavy sound from throat", "Stopping breath", "Stretching vowel"], ans: 0 }
+            ]
+        };
+
+        const storeItems = [
+            { id: 'rod_silver', type: 'rod', name: 'سنارة الفضة', price: 100 },
+            { id: 'rod_gold', type: 'rod', name: 'سنارة الذهب', price: 250 },
+            { id: 'boat_motor', type: 'boat', name: 'قارب المحرك', price: 300 }
+        ];
+
+        const fishesInfo = [
+            { name: 'سمكة الماكريل', rarity: 'شائعة', depth: 'سطحي' },
+            { name: 'التونة الذهبية', rarity: 'نادرة', depth: 'متوسط' },
+            { name: 'الميجالودون (منقرضة)', rarity: 'أسطورية', depth: 'أعماق سحيقة' }
+        ];
+
+        // State
+        let state = {
+            coins: 150, score: 0, rod: 'خشبية', boat: 'خشب صغير',
+            book: 'ajroomya', startP: 1, endP: 50, answered: []
+        };
+
+        // Canvas Engine
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let hookY = 50;
+        let isCasting = false;
+        let fishList = [
+            { x: 50, y: 180, speed: 2, color: '#f39c12' },
+            { x: 250, y: 300, speed: 1.5, color: '#e74c3c' },
+            { x: 450, y: 400, speed: 1, color: '#9b59b6' }
+        ];
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function loop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Water
+            let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#4facfe'); grad.addColorStop(1, '#001e3d');
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Boat
+            ctx.fillStyle = '#8b4513';
+            ctx.fillRect(canvas.width / 2 - 50, 20, 100, 20);
+
+            // Line & Hook
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 35); ctx.lineTo(canvas.width / 2, hookY);
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath(); ctx.arc(canvas.width / 2, hookY, 6, 0, Math.PI * 2); ctx.fill();
+
+            // Fish
+            fishList.forEach(f => {
+                f.x += f.speed;
+                if (f.x > canvas.width + 30) f.x = -30;
+                ctx.fillStyle = f.color;
+                ctx.beginPath(); ctx.ellipse(f.x, f.y, 18, 9, 0, 0, Math.PI * 2); ctx.fill();
+            });
+
+            // Physics
+            if (isCasting) {
+                hookY += 4;
+                if (hookY > canvas.height - 40) {
+                    isCasting = false;
+                    openQuestion();
+                }
+            } else if (hookY > 50) {
+                hookY -= 5;
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        function castLine() {
+            if (!isCasting && hookY <= 55) isCasting = true;
+        }
+
+        function openQuestion() {
+            let pool = (questions[state.book] || []).filter(q => q.page >= state.startP && q.page <= state.endP);
+            if (pool.length === 0) pool = questions['ajroomya'];
+
+            let q = pool[Math.floor(Math.random() * pool.length)];
+            let bObj = books.find(b => b.id === state.book);
+
+            document.getElementById('qSource').innerText = `المصدر: ${bObj.title} (ص ${q.page})`;
+            document.getElementById('qText').innerText = q.q;
+
+            let optsDiv = document.getElementById('qOptions');
+            optsDiv.innerHTML = '';
+            q.opts.forEach((opt, idx) => {
+                let btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerText = `${idx + 1}. ${opt}`;
+                btn.onclick = () => {
+                    if (idx === q.ans) {
+                        state.coins += 50; state.score += 20;
+                        alert('إجابة صحيحة! (+50 ذهب)');
+                    } else {
+                        alert('إجابة خاطئة، حاول ثانية!');
+                    }
+                    updateUI();
+                    document.getElementById('qModal').style.display = 'none';
+                };
+                optsDiv.appendChild(btn);
+            });
+
+            document.getElementById('qModal').style.display = 'flex';
+        }
+
+        // Tabs & Logic
+        function showTab(name) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(`tab-${name}`).classList.add('active');
+        }
+
+        function initTeacher() {
+            let bSel = document.getElementById('bookSelect');
+            bSel.innerHTML = '';
+            books.forEach(b => {
+                let opt = document.createElement('option');
+                opt.value = b.id; opt.innerText = b.title;
+                bSel.appendChild(opt);
+            });
+            updateRanges();
+        }
+
+        function updateRanges() {
+            let bId = document.getElementById('bookSelect').value;
+            let b = books.find(x => x.id === bId);
+            let rSel = document.getElementById('rangeSelect');
+            rSel.innerHTML = '';
+            let step = 50;
+            for (let i = 0; i < Math.ceil(b.pages / step); i++) {
+                let s = i * step + 1, e = Math.min((i + 1) * step, b.pages);
+                let opt = document.createElement('option');
+                opt.value = `${s}-${e}`; opt.innerText = `صفحة ${s} إلى ${e}`;
+                rSel.appendChild(opt);
+            }
+            applyPresetRange();
+        }
+
+        function applyPresetRange() {
+            let parts = document.getElementById('rangeSelect').value.split('-');
+            document.getElementById('startPage').value = parts[0];
+            document.getElementById('endPage').value = parts[1];
+        }
+
+        function saveTeacherSettings() {
+            state.book = document.getElementById('bookSelect').value;
+            state.startP = parseInt(document.getElementById('startPage').value);
+            state.endP = parseInt(document.getElementById('endPage').value);
+            let b = books.find(x => x.id === state.book);
+            document.getElementById('currentBookText').innerText = `${b.title} (صفحة ${state.startP} - ${state.endP})`;
+            alert('تم حفظ النطاق بنجاح!');
+            showTab('game');
+        }
+
+        function renderStore() {
+            let grid = document.getElementById('storeGrid');
+            grid.innerHTML = '';
+            storeItems.forEach(item => {
+                grid.innerHTML += `
+                    <div class="card">
+                        <h3>${item.name}</h3>
+                        <p>السعر: ${item.price} 🪙</p>
+                        <button class="buy-btn" onclick="buyItem('${item.id}', ${item.price}, '${item.name}', '${item.type}')">شراء</button>
+                    </div>
+                `;
+            });
+        }
+
+        function buyItem(id, price, name, type) {
+            if (state.coins >= price) {
+                state.coins -= price;
+                if (type === 'rod') state.rod = name;
+                if (type === 'boat') state.boat = name;
+                updateUI();
+                alert(`تم شراء ${name} بنجاح!`);
+            } else alert('لا تملك ذهباً كافياً!');
+        }
+
+        function renderEncyclo() {
+            let grid = document.getElementById('encycloGrid');
+            grid.innerHTML = '';
+            fishesInfo.forEach(f => {
+                grid.innerHTML += `
+                    <div class="card">
+                        <h3>${f.name}</h3>
+                        <p>الندرة: ${f.rarity}</p>
+                        <p>العمق: ${f.depth}</p>
+                    </div>
+                `;
+            });
+        }
+
+        function updateUI() {
+            document.getElementById('coins').innerText = state.coins;
+            document.getElementById('score').innerText = state.score;
+            document.getElementById('rodName').innerText = state.rod;
+            document.getElementById('boatName').innerText = state.boat;
+        }
+
+        window.onload = () => {
+            initTeacher();
+            renderStore();
+            renderEncyclo();
+            loop();
+        };
+    </script>
+</body>
+</html>
